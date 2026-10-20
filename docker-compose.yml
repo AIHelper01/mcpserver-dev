@@ -1,0 +1,30 @@
+services:
+  mcp-12306:
+    image: 12306-mcp:latest
+    container_name: mcp-12306
+    command: ["node", "/mcp/node_modules/12306-mcp/build/index.js", "--port", "16683"]
+    ports:
+      - "16683:16683"
+    restart: unless-stopped
+
+  mcp-weather:
+    build: ./w-mcp/01_weather-mcp-server
+    image: w-weather-mcp:latest
+    container_name: mcp-weather
+    environment:
+      OPENWEATHER_API_KEY: ${OPENWEATHER_API_KEY}
+    ports:
+      - "16681:16681"
+    restart: unless-stopped
+
+  mcp-file:
+    build: ./w-mcp/02_file-mcp-server
+    image: w-file-mcp:latest
+    container_name: mcp-file
+    environment:
+      FILE_MCP_STATE_DIR: /app
+    volumes:
+      - ./w-mcp/02_file-mcp-server:/app
+    ports:
+      - "16682:16682"
+    restart: unless-stopped

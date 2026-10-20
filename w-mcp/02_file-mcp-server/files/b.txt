@@ -1,0 +1,21 @@
+package main
+
+import (
+    "bufio"
+    "fmt"
+    "os"
+)
+
+func main() {
+    // 创建并写入文件
+    filePath := "golang.txt"
+    file, err := os.OpenFile(filePath, os.O_WRONLY|os.O_CREATE, 0666)
+    if err != nil {
+        fmt.Println("文件打开失败", err)
+    }
+    defer file.Close()
+
+    writer := bufio.NewWriter(file)
+    writer.WriteString("Hello, Go!\n")
+    writer.Flush()
+}

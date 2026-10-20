@@ -1,0 +1,11 @@
+#include <stdio.h>
+
+int main() {
+    // 创建并写入文件
+    FILE *file = fopen("test.txt", "w");
+    if (file != NULL) {
+        fprintf(file, "Hello, C!\n");
+        fclose(file);
+    }
+    return 0;
+}

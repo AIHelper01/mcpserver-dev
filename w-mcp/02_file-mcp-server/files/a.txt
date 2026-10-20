@@ -1,0 +1,12 @@
+# 读取文件内容
+with open("file.txt", "r") as file:
+    content = file.read()
+print(content)
+
+# 写入文件内容
+with open("file.txt", "w") as file:
+    file.write("Hello, World!")
+
+# 追加文件内容
+with open("file.txt", "a") as file:
+    file.write("Hello, again!")

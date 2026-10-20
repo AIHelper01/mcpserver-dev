@@ -1,0 +1,7 @@
+.deleted_files/
+.snapshots/
+secure_rename_history.lock
+__pycache__/
+*.py[cod]
+.ruff_cache/
+.ipynb_checkpoints/

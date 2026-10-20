@@ -1,0 +1,8 @@
+.env
+__pycache__/
+**/__pycache__/
+**/.ipynb_checkpoints/
+node_modules/
+.DS_Store
+# 第三方源码各自保留上游 .git,独立于本仓库
+third-party/12306-mcp/
