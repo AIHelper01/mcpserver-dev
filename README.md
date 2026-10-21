@@ -10,7 +10,7 @@
 
 | 目录 | 服务 | 容器 | 端口 | 端点 |
 |---|---|---|---|---|
-| w-mcp/00_mcp-server-demo | 教学 demo（ping/时间） | 未容器化 | 8000 | 本机直跑 |
+| w-mcp/00_mcp-server-demo | 教学 demo（ping/时间） | 未容器化 | 8000 | uv 直跑；`w-time_mcp_server.py` 为 stdio |
 | w-mcp/01_weather-mcp-server | w-OpenWeatherMCP | mcp-weather | 16681 | `/mcp` + `/sse` |
 | w-mcp/02_file-mcp-server | w-FileWorkbenchMCP | mcp-file | 16682 | `/mcp` + `/sse` |
 | third-party/12306-mcp | 12306-mcp v0.3.10（第三方） | mcp-12306 | 16683 | `/mcp` + `/sse` |
@@ -66,7 +66,8 @@ if __name__ == "__main__":
 本地调试：
 
 ```bash
-python w-xxx_mcp_server.py                       # 直跑（仅 /mcp）
+uv run python w-xxx_mcp_server.py                # 直跑（仅 /mcp，依赖由 pyproject 自动装）
+uv run python asgi_both.py --file w-xxx_mcp_server.py   # 双传输：/mcp + /sse
 npx @modelcontextprotocol/inspector              # 官方调试器
 curl -X POST http://127.0.0.1:<port>/mcp \
   -H 'Content-Type: application/json' \
@@ -74,7 +75,91 @@ curl -X POST http://127.0.0.1:<port>/mcp \
   -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"t","version":"1"}}}'
 ```
 
-## 二、如何用 Docker 起
+## 二、启动方式与跨平台支持
+
+四条启动路径，命令在 macOS / Linux / Windows 上**逐字相同**，只有临时设环境变量的
+语法不同：
+
+| 方式 | 命令（在服务目录内执行） | 传输 | 适用场景 |
+|---|---|---|---|
+| 脚本直跑 | `uv run python w-xxx_mcp_server.py` | 仅 `/mcp` | 开发调试（FastMCP 原生） |
+| 双传输垫片 | `uv run python asgi_both.py --file w-xxx_mcp_server.py` | `/mcp` + `/sse` | 兼容只支持 SSE 的客户端 |
+| stdio | `uv run python w-time_mcp_server.py` | stdio | 客户端本地拉起进程，不占端口 |
+| Docker | `docker compose up -d --build`（仓库根） | `/mcp` + `/sse` | 常驻、跨机器、免装 Python |
+
+已实测矩阵（本机 macOS + uv 0.11 + Docker，2026-10-21）：
+
+| 服务 | uv 直跑 `/mcp` | uv 垫片 `/mcp`+`/sse` | uv stdio | Docker `/mcp`+`/sse` |
+|---|---|---|---|---|
+| 00 demo | ✅ :17786 | ✅ :17783 | ✅ w-TimeMCP | 未容器化 |
+| 01 weather | ✅ :17784 | ✅ :17781 | 不适用 | ✅ :16681 |
+| 02 file | ✅ :17785 | ✅ :17782 | 不适用 | ✅ :16682 |
+| third-party 12306 | 需 Node，不由本仓库维护 | 同左 | — | ✅ :16683 |
+
+### 前置要求
+
+- **uv**（`uv --version`，建议 ≥0.5）：安装见 <https://docs.astral.sh/uv/>。
+  每个自研服务目录都有 `pyproject.toml` + `.python-version`，`uv run` 会自建
+  `.venv` 并按需拉取 Python 3.12，因此**不必预装 Python**，三系统同一条命令。
+- **依赖锁定**：`uv.lock` 需提交（已包含 `sys_platform == 'win32'` 解析标记，
+  Windows 上解析结果与 macOS/Linux 一致）；`.venv/` 已在 `.gitignore`。
+- **换行符**：`.gitattributes` 强制 `*.py` 等为 LF，避免 Windows 检出 CRLF
+  导致容器内启动异常。
+- **Docker**：macOS/Windows 用 Docker Desktop；Linux 用 docker + compose 插件。
+- **Python 下限**：`requires-python = ">=3.11"`（代码用了 `datetime.UTC`）。
+  用系统 Python 直跑时别低于 3.11，容器内是 3.12。
+
+### 命令示例
+
+macOS / Linux（bash、zsh）：
+
+```bash
+cd w-mcp/01_weather-mcp-server
+uv run python asgi_both.py --file w-openweather_mcp_server.py --port 16681
+
+# 只有走脚本原生入口时才需要环境变量
+WEATHER_MCP_PORT=16681 uv run python w-openweather_mcp_server.py
+```
+
+Windows（PowerShell）：
+
+```powershell
+cd w-mcp\01_weather-mcp-server
+uv run python asgi_both.py --file w-openweather_mcp_server.py --port 16681
+
+# PowerShell 不支持 VAR=value 前缀写法，改用 $env:
+$env:WEATHER_MCP_PORT = "16681"
+uv run python w-openweather_mcp_server.py
+Remove-Item Env:WEATHER_MCP_PORT
+```
+
+> 垫片提供 `--file/--module/--host/--port/--log-level` 参数，就是为了让启动命令
+> **不依赖 shell 的环境变量语法**，跨平台优先用它。省略 `--port` 时沿用服务自己的
+> 默认端口；显式指定端口会自动把 `127.0.0.1:<port>`、`localhost:<port>` 追加进
+> Host 白名单。局域网访问仍需各服务的 `*_ALLOWED_HOSTS`。
+
+>
+> stdio 类型的客户端配置（Codex `command`/`args`、Cherry Studio STDIO）统一写成
+> `uv run --project <服务目录> python <脚本绝对路径>`：依赖由该目录的 `uv.lock`
+> 决定，配置里不出现版本号，三系统只是路径写法不同（已实测）。
+
+### 系统差异清单
+
+| 项目 | macOS | Linux | Windows |
+|---|---|---|---|
+| `uv run`（stdio / `/mcp` / 双传输） | ✅ 已实测 | 同一套 uv + Python，行为一致 | 同一套 uv + Python，行为一致 |
+| `docker compose` | ✅ 已实测 | ✅ 需 docker + compose 插件 | ✅ 需 Docker Desktop（WSL2 后端） |
+| 根目录 `.env` 自动加载 | ✅ | ✅ | ✅（python-dotenv 逐级向上找，与路径分隔符无关） |
+| 带连字符的主脚本 | ✅ | ✅ | ✅（垫片按文件路径 import，不依赖模块名） |
+| compose 卷 `./w-mcp/...:/app` | ✅ | ✅ | 需 Docker Desktop 做路径翻译；NTFS 区分大小写场景注意 |
+| 对外暴露 `0.0.0.0` | 首次弹窗放行 | 需放行端口（ufw / firewalld） | 防火墙弹窗需允许 |
+| 文件名大小写 | APFS 默认不敏感 | 敏感 | 不敏感 → 代码内路径一律按真实大小写书写 |
+| 常驻自启 | Docker Desktop 开 Launch | `systemctl enable docker` | Docker Desktop 开 Start on login |
+
+`third-party/` 下的 Node 服务只保证 Docker 这一条路径（compose 同一条命令，三系统一致）；
+想脱离 Docker 跑需自备 Node 20+，属上游仓库支持范围。
+
+## 三、如何用 Docker 起
 
 固定结构：
 
@@ -92,7 +177,9 @@ docker-compose.yml             # 统一管理
    处理 `/sse` + `/messages/`。`app` 是一个**原生 ASGI 分发函数**（按 path
    直调三个 handler），Starlette 只借它跑 lifespan（`@asynccontextmanager`
    包 `streamable.run()`）和默认 404。
-   server 脚本零改动，只需 `MCP_MODULE` 指向模块名。
+   server 脚本零改动：容器里用 `MCP_MODULE=mcp_server`（或 `MCP_SERVER_FILE=路径`），
+   本机调试直接用 CLI：`uv run python asgi_both.py --file w-xxx_mcp_server.py`。
+   垫片按**文件路径**加载目标脚本，所以带连字符的文件名也能直接喂进去。
 
 2. Dockerfile 套路（Python 服务）：
 
@@ -137,9 +224,8 @@ docker-compose.yml             # 统一管理
    - 端口排查：`lsof -nP -iTCP:<port> -sTCP:LISTEN`（宿主残留进程会抢 IPv4，
      Docker 只占 IPv6，表现为端口通但响应来自旧服务）。
 
-## 三、踩坑记录（勿重蹈）
+## 四、踩坑记录（勿重蹈）
 
-- 模块名/文件名不能带连字符：COPY 时重命名为 `mcp_server.py`。
 - Starlette `Mount("/mcp")` 的匹配规则是 `/mcp/...`，裸 `/mcp` 会被 307
   重定向到 `/mcp/`，而多数 MCP 客户端不跟重定向 → 不要用 Mount 挂 `/mcp`。
 - Starlette `Route(endpoint=...)` 会把 handler 返回值当 Response 再发一次：
@@ -149,13 +235,19 @@ docker-compose.yml             # 统一管理
 - 新版 starlette（容器内 1.9.0）`Starlette()` 没有 `redirect_slashes` 参数
   （在 `Router()` 上），别指望用 `redirect_slashes=False` 绕开上面的坑。
 - 垫片已同时兼容 `/mcp` 与 `/mcp/`，未知路径统一 404。
+- 带连字符的主脚本（`w-xxx_mcp_server.py`）能直接 `python` 运行，但**不能被 import**
+  （模块名不允许连字符）→ 容器里 COPY 成 `mcp_server.py`，本机用垫片的 `--file`
+  走 `spec_from_file_location` 按路径加载。
+- uv 用项目模式而不是 `--no-project --with ...`：加 `pyproject.toml` 后命令更短，
+  且 `uv.lock` 能锁定三系统一致的依赖；记得忽略 `.venv/`、提交 `uv.lock`。
+- PowerShell 没有 `VAR=value cmd` 前缀语法 → 跨平台命令一律靠 CLI 参数传配置。
 - `StreamableHTTPSessionManager.run()` 不接受 app 参数，lifespan 需自己包
   `@asynccontextmanager`。
 - `.env` 给 compose 用的行避免空格式差异：`KEY=value`，值不带引号最稳。
 - 局域网访问要追加 Host 白名单：`WEATHER_MCP_ALLOWED_HOSTS` /
   `FILE_MCP_ALLOWED_HOSTS`（12306 无 Host 校验，无需配置）。
 
-## 四、客户端接入
+## 五、客户端接入
 
 统一模板（`<name>`/`<port>` 按表替换）：
 

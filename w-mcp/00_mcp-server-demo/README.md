@@ -5,40 +5,29 @@
 保留两种传输的教学区分：`w-mcp_demo_server.py` 通过 HTTP 展示 tool、resource、prompt；
 `w-time_mcp_server.py` 通过 stdio 提供带时区的时间工具。仅保留这两个入口，不保留旧名脚本。
 
-## 安装
+## 安装与启动
 
-依赖 Python 3.12 与 `mcp>=1.12,<2`；`w-time_mcp_server.py` 另需 `tzdata`。
-
-### 方式一：pip 装进现有环境
-
-```bash
-python -m pip install "mcp>=1.12,<2" tzdata
-```
-
-`tzdata` 为没有系统时区数据库的环境（常见于 Windows）提供 IANA 数据。UTC 和服务器本地时间不依赖它。
-
-### 方式二：uv 临时环境免安装启动（课堂推荐）
-
-不污染当前 Python，一条命令起服务：
+依赖已声明在本目录的 `pyproject.toml` / `uv.lock`（`mcp>=1.12,<2`、`uvicorn`，
+以及仅 Windows 生效的 `tzdata`，要求 Python ≥3.11）。`uv run` 会自动创建 `.venv`
+并按需拉取 Python 3.12，macOS / Linux / Windows 用的是同一条命令。
 
 ```bash
-# HTTP 演示服务（tool / resource / prompt）
-uv run --no-project --with "mcp>=1.12,<2" python w-mcp_demo_server.py
+# stdio 时间服务（由 MCP 客户端拉起，或手动调试）
+uv run python w-time_mcp_server.py
 
-# stdio 时间服务
-uv run --no-project --with "mcp>=1.12,<2" --with tzdata python w-time_mcp_server.py
+# HTTP 演示服务，仅 /mcp
+uv run python w-mcp_demo_server.py
+
+# 同一个演示服务同时提供 /mcp 与 /sse
+uv run python asgi_both.py --file w-mcp_demo_server.py --port 8000
 ```
 
-### 方式三：uv 固定虚拟环境
-
-```bash
-uv venv .venv --python 3.12
-uv pip install --python .venv/bin/python "mcp>=1.12,<2" tzdata
-uv run --python .venv/bin/python w-mcp_demo_server.py
-```
-
-要复用本仓库配套内核环境，把 `.venv/bin/python` 换成该环境的绝对路径即可，
-例如 `uv pip install --python <你的路径>/env_agent_uv/.venv/bin/python "mcp>=1.12,<2" tzdata`。
+- `tzdata` 用 `sys_platform == 'win32'` 标记：Windows 缺少系统 IANA 数据库时自动安装，
+  macOS / Linux 不装（用系统时区数据）。UTC 和服务端本地时间不依赖它。
+- 没有 uv 时退回 pip：`python -m pip install "mcp>=1.12,<2" uvicorn tzdata`
+  后直接 `python w-mcp_demo_server.py`（需 Python ≥3.11）。
+- Windows PowerShell 换端口写 `$env:DEMO_MCP_PORT = "8000"`，不是 `VAR=value` 前缀；
+  或者直接用垫片的 `--port` 参数。
 
 ## HTTP 基础示例
 
@@ -92,7 +81,7 @@ codex mcp list
 ```
 
 也可以直接写 `~/.codex/config.toml`。Codex 用 `url` 表示 Streamable HTTP，
-用 `command` + `args` 表示 stdio：
+用 `command` + `args` 表示 stdio（`--project` 让 uv 用本目录的依赖锁）：
 
 ```toml
 [mcp_servers.w-MCPDemo]
@@ -101,9 +90,8 @@ url = "http://127.0.0.1:8000/mcp"
 [mcp_servers.w-TimeMCP]
 command = "uv"
 args = [
-  "run", "--no-project",
-  "--with", "mcp>=1.12,<2", "--with", "tzdata",
-  "python", "/绝对路径/w-time_mcp_server.py",
+  "run", "--project", "/绝对路径/w-mcp/00_mcp-server-demo",
+  "python", "/绝对路径/w-mcp/00_mcp-server-demo/w-time_mcp_server.py",
 ]
 startup_timeout_sec = 20
 ```
@@ -117,7 +105,7 @@ startup_timeout_sec = 20
 
 - `w-MCPDemo`：类型选 **Streamable HTTP**，服务器地址填 `http://127.0.0.1:8000/mcp`，保存后打开开关。
 - `w-TimeMCP`：类型选 **STDIO**，命令填 `uv`，参数填上面 `args` 数组的内容（逐行填写），
-  其中脚本路径必须是绝对路径。
+  其中路径必须是绝对路径。`--project` 指向本目录，依赖由 `pyproject.toml` / `uv.lock` 决定，客户端配置里不必再写版本号。
 
 Cherry Studio 的远程地址字段是 `baseUrl`（旧版本兼容 `url`），JSON 形式：
 
@@ -137,9 +125,8 @@ Cherry Studio 的远程地址字段是 `baseUrl`（旧版本兼容 `url`），JS
       "type": "stdio",
       "command": "uv",
       "args": [
-        "run", "--no-project",
-        "--with", "mcp>=1.12,<2", "--with", "tzdata",
-        "python", "/绝对路径/w-time_mcp_server.py"
+        "run", "--project", "/绝对路径/w-mcp/00_mcp-server-demo",
+        "python", "/绝对路径/w-mcp/00_mcp-server-demo/w-time_mcp_server.py"
       ],
       "isActive": false
     }

@@ -6,3 +6,7 @@ node_modules/
 .DS_Store
 # 第三方源码各自保留上游 .git,独立于本仓库
 third-party/12306-mcp/
+
+# uv 虚拟环境（各服务目录内，勿提交；uv.lock 需提交）
+.venv/
+**/.venv/

@@ -1,0 +1,14 @@
+[project]
+name = "w-mcp-server-demo"
+version = "1.0.0"
+description = "Teaching demo MCP servers (Streamable HTTP and stdio)"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "mcp>=1.12,<2",
+    "uvicorn>=0.30",
+    "tzdata>=2024.1; sys_platform == 'win32'",
+]
+
+[tool.uv]
+package = false

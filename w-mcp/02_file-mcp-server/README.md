@@ -49,10 +49,10 @@ http://<服务器IP>:16682/mcp
 
 ## 环境要求
 
-在本模块环境中安装依赖：
+用 uv 时无需手工安装（见「启动服务」）；使用现有 Python 环境时：
 
 ```bash
-python -m pip install "mcp>=1.12,<2" python-dotenv requests
+python -m pip install "mcp>=1.12,<2" python-dotenv uvicorn
 ```
 
 主要依赖：
@@ -155,27 +155,41 @@ FILE_MCP_UVICORN_TIMEOUT_GRACEFUL_SHUTDOWN=2
 
 ## 启动服务
 
-依赖 Python 3.12、`mcp>=1.12,<2`、`python-dotenv`。
+依赖已声明在本目录的 `pyproject.toml` / `uv.lock`（`mcp>=1.12,<2`、`python-dotenv`、
+`uvicorn`，要求 Python ≥3.11）。`uv run` 会自动创建 `.venv` 并按需拉取 Python 3.12，
+因此 macOS / Linux / Windows 用的是同一条命令。
 
-### 方式一：现有环境直接运行
+### 方式一：uv（推荐）
 
 ```bash
+# 仅 /mcp（FastMCP 原生 Streamable HTTP）
+uv run python w-file_workbench_mcp_server.py
+
+# 同时提供 /mcp 与 /sse（兼容只支持 SSE 的客户端）
+uv run python asgi_both.py --file w-file_workbench_mcp_server.py
+
+# 需要指定监听地址/端口时（省略 --port 沿用 FILE_MCP_PORT 或默认 16682）
+uv run python asgi_both.py --file w-file_workbench_mcp_server.py --host 0.0.0.0 --port 16682
+```
+
+Windows PowerShell 需要临时环境变量时写 `$env:FILE_MCP_PORT = "16682"`，
+不要用 bash 的 `FILE_MCP_PORT=16682 ...` 前缀语法。
+
+### 方式二：Docker（免装 Python，状态留在宿主目录）
+
+```bash
+cd ../..            # 仓库根 mcpserver-dev
+docker compose up -d --build mcp-file
+docker compose logs -f mcp-file
+```
+
+compose 已把本目录挂到容器 `/app`，`files/`、`.deleted_files/`、重命名历史在宿主可见。
+
+### 方式三：pip 装进现有环境
+
+```bash
+python -m pip install "mcp>=1.12,<2" python-dotenv uvicorn
 python w-file_workbench_mcp_server.py
-```
-
-### 方式二：uv 临时环境免安装启动（课堂推荐）
-
-```bash
-uv run --no-project --with "mcp>=1.12,<2" --with python-dotenv \
-  python w-file_workbench_mcp_server.py
-```
-
-### 方式三：uv 固定虚拟环境
-
-```bash
-uv venv .venv --python 3.12
-uv pip install --python .venv/bin/python "mcp>=1.12,<2" python-dotenv
-uv run --python .venv/bin/python w-file_workbench_mcp_server.py
 ```
 
 启动后 MCP 客户端连接：

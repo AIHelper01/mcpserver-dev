@@ -1,0 +1,12 @@
+# 三系统统一换行符，避免 Windows 检出 CRLF 后容器内脚本报错
+* text=auto
+*.py text eol=lf
+*.md text eol=lf
+*.toml text eol=lf
+*.json text eol=lf
+*.yml text eol=lf
+*.lock text eol=lf
+.gitattributes text eol=lf
+*.png binary
+*.jpg binary
+*.zip binary

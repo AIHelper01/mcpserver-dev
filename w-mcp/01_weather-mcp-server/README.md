@@ -7,31 +7,41 @@
 
 ## 安装与启动
 
-依赖 Python 3.12、`mcp>=1.12,<2`、`python-dotenv`、`requests`。
+依赖已声明在本目录的 `pyproject.toml` / `uv.lock`（`mcp>=1.12,<2`、`python-dotenv`、
+`requests`、`uvicorn`，要求 Python ≥3.11）。`uv run` 会自动创建 `.venv` 并按需拉取
+Python 3.12，macOS / Linux / Windows 用的是同一条命令。
 
-### 方式一：pip 装进现有环境
+### 方式一：uv（推荐）
 
 ```bash
-python -m pip install "mcp>=1.12,<2" python-dotenv requests
+# 仅 /mcp（FastMCP 原生 Streamable HTTP）
+uv run python w-openweather_mcp_server.py
+
+# 同时提供 /mcp 与 /sse（兼容只支持 SSE 的客户端）
+uv run python asgi_both.py --file w-openweather_mcp_server.py
+
+# 需要指定监听地址/端口时（省略 --port 沿用 WEATHER_MCP_PORT 或默认 16681）
+uv run python asgi_both.py --file w-openweather_mcp_server.py --host 0.0.0.0 --port 16681
+```
+
+Windows PowerShell 需要临时环境变量时写 `$env:OPENWEATHER_API_KEY = "..."`，
+不要用 bash 的 `KEY=value ...` 前缀语法；密钥也可以直接放仓库根目录 `.env`。
+
+### 方式二：Docker（免装 Python）
+
+```bash
+cd ../..            # 仓库根 mcpserver-dev
+docker compose up -d --build mcp-weather
+docker compose logs -f mcp-weather
+```
+
+镜像内已注入 `OPENWEATHER_API_KEY`（来自根目录 `.env`），容器端口 16681。
+
+### 方式三：pip 装进现有环境
+
+```bash
+python -m pip install "mcp>=1.12,<2" python-dotenv requests uvicorn
 python w-openweather_mcp_server.py
-```
-
-### 方式二：uv 临时环境免安装启动（课堂推荐）
-
-```bash
-uv run --no-project \
-  --with "mcp>=1.12,<2" --with python-dotenv --with requests \
-  python w-openweather_mcp_server.py
-```
-
-uv 的临时环境不写入仓库，也不会污染当前 Python；首次执行会下载依赖，之后走缓存。
-
-### 方式三：uv 固定虚拟环境
-
-```bash
-uv venv .venv --python 3.12
-uv pip install --python .venv/bin/python "mcp>=1.12,<2" python-dotenv requests
-uv run --python .venv/bin/python w-openweather_mcp_server.py
 ```
 
 ### 密钥与地址

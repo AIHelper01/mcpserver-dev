@@ -1,0 +1,15 @@
+[project]
+name = "w-openweather-mcp-server"
+version = "1.0.0"
+description = "Current weather and forecast MCP server over OpenWeather"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "mcp>=1.12,<2",
+    "python-dotenv>=1.0",
+    "requests>=2.32",
+    "uvicorn>=0.30",
+]
+
+[tool.uv]
+package = false
