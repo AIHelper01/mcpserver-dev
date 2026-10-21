@@ -29,6 +29,20 @@ uv run python asgi_both.py --file w-mcp_demo_server.py --port 8000
 - Windows PowerShell 换端口写 `$env:DEMO_MCP_PORT = "8000"`，不是 `VAR=value` 前缀；
   或者直接用垫片的 `--port` 参数。
 
+### Docker（免装 Python）
+
+```bash
+cd ../..            # 仓库根 mcpserver-dev
+docker compose up -d --build mcp-demo
+docker compose logs -f mcp-demo
+```
+
+容器名 `mcp-demo`，端口 16684，同时提供 `/mcp` 与 `/sse`；镜像内
+`DEMO_MCP_PORT=16684`，默认不校验 Host，局域网可直接连。
+stdio 的 `w-time_mcp_server.py` 不进容器，由 MCP 客户端在需要的那台机器上拉起。
+
+客户端连 `http://127.0.0.1:16684/mcp`（本机直跑时仍是 8000）。
+
 ## HTTP 基础示例
 
 ```bash

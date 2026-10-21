@@ -10,7 +10,7 @@
 
 | 目录 | 服务 | 容器 | 端口 | 端点 |
 |---|---|---|---|---|
-| w-mcp/00_mcp-server-demo | 教学 demo（ping/时间） | 未容器化 | 8000 | uv 直跑；`w-time_mcp_server.py` 为 stdio |
+| w-mcp/00_mcp-server-demo | w-MCPDemo（ping/add/prompt） | mcp-demo | 16684 | `/mcp` + `/sse` |
 | w-mcp/01_weather-mcp-server | w-OpenWeatherMCP | mcp-weather | 16681 | `/mcp` + `/sse` |
 | w-mcp/02_file-mcp-server | w-FileWorkbenchMCP | mcp-file | 16682 | `/mcp` + `/sse` |
 | third-party/12306-mcp | 12306-mcp v0.3.10（第三方） | mcp-12306 | 16683 | `/mcp` + `/sse` |
@@ -19,8 +19,9 @@
   compose 覆盖 command 把端口改为 16683；`third-party/12306-mcp` 为上游原始源码
   （含 .git 与 node_modules），仅作参考，不参与构建。
 
-三个容器均由 `docker-compose.yml` 统一管理，全部同时暴露
+四个容器均由 `docker-compose.yml` 统一管理，全部同时暴露
 Streamable HTTP（`/mcp`）与 SSE（`/sse`）两种传输。
+`w-time_mcp_server.py` 是 stdio 教学示例，不容器化（由客户端本地拉起）。
 
 ## 一、如何开发一个 MCP Server
 
@@ -61,7 +62,7 @@ if __name__ == "__main__":
 - 中文场景提供 `language="zh"` 参数做双语输出；地点名等输入原样透传上游 API。
 - 文件类工具注意路径解析（空 base_dir 以进程 cwd 为根）与备份策略（参考 02 的
   `.deleted_files/`、`.snapshots/`）。
-- 分配新端口顺延：16684、16685…
+- 已占用 16681–16684，新端口从 16685 起顺延。
 
 本地调试：
 
@@ -91,7 +92,7 @@ curl -X POST http://127.0.0.1:<port>/mcp \
 
 | 服务 | uv 直跑 `/mcp` | uv 垫片 `/mcp`+`/sse` | uv stdio | Docker `/mcp`+`/sse` |
 |---|---|---|---|---|
-| 00 demo | ✅ :17786 | ✅ :17783 | ✅ w-TimeMCP | 未容器化 |
+| 00 demo | ✅ :17786 | ✅ :17783 | ✅ w-TimeMCP | ✅ :16684 |
 | 01 weather | ✅ :17784 | ✅ :17781 | 不适用 | ✅ :16681 |
 | 02 file | ✅ :17785 | ✅ :17782 | 不适用 | ✅ :16682 |
 | third-party 12306 | 需 Node，不由本仓库维护 | 同左 | — | ✅ :16683 |

@@ -1,4 +1,11 @@
 services:
+  mcp-demo:
+    build: ./w-mcp/00_mcp-server-demo
+    image: w-demo-mcp:latest
+    container_name: mcp-demo
+    ports:
+      - "16684:16684"
+    restart: unless-stopped
   mcp-12306:
     image: 12306-mcp:latest
     container_name: mcp-12306
