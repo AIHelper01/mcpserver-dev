@@ -22,6 +22,8 @@ Routing is a plain ASGI dispatcher instead of Starlette routes on purpose:
   already completed" on every disconnected client.
 * ``Mount("/mcp")`` only matches ``/mcp/...`` and turns a bare ``/mcp``
   request into a 307 redirect that many MCP clients do not follow.
+
+``GET /health`` answers 200 JSON for container health checks; unknown paths 404.
 """
 
 from __future__ import annotations
@@ -29,6 +31,7 @@ from __future__ import annotations
 import argparse
 import importlib
 import importlib.util
+import json
 import os
 import sys
 from contextlib import asynccontextmanager
@@ -105,6 +108,21 @@ def build_app(target: str, host: str | None = None, port: int | None = None):
             path = path[len(root_path):]
         if len(path) > 1:
             path = path.rstrip("/")
+
+        if path == "/health":
+            payload = json.dumps(
+                {"ok": True, "server": app.mcp_name, "transports": ["/mcp", "/sse"]}
+            ).encode()
+            await send({
+                "type": "http.response.start",
+                "status": 200,
+                "headers": [
+                    (b"content-type", b"application/json"),
+                    (b"content-length", str(len(payload)).encode()),
+                ],
+            })
+            await send({"type": "http.response.body", "body": payload})
+            return
 
         if path == "/sse":
             await handle_sse(scope, receive, send)

@@ -1,3 +1,12 @@
+# MCP 服务编排：一条命令起停全部（详见 README「三、如何用 Docker 起」）
+#   make up / make down / make status / make check   （或 python mcp_ctl.py <cmd>）
+#
+# healthcheck 约定：
+#   - 自研 Python 服务：GET /health（由 docker/asgi_both.py 提供）必须返回 200。
+#   - third-party 12306：上游无 /health，GET /mcp 返回 405 说明监听与 HTTP 栈正常，
+#     因此把“任意 <500 响应”视为存活。
+#   - test 里的端口必须与该服务 ports 映射保持一致。
+
 services:
   mcp-demo:
     build: ./w-mcp/00_mcp-server-demo
@@ -5,13 +14,14 @@ services:
     container_name: mcp-demo
     ports:
       - "16684:16684"
-    restart: unless-stopped
-  mcp-12306:
-    image: 12306-mcp:latest
-    container_name: mcp-12306
-    command: ["node", "/mcp/node_modules/12306-mcp/build/index.js", "--port", "16683"]
-    ports:
-      - "16683:16683"
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - python -c "import urllib.request,sys;sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:16684/health',timeout=3).status==200 else 1)"
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     restart: unless-stopped
 
   mcp-weather:
@@ -22,6 +32,14 @@ services:
       OPENWEATHER_API_KEY: ${OPENWEATHER_API_KEY}
     ports:
       - "16681:16681"
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - python -c "import urllib.request,sys;sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:16681/health',timeout=3).status==200 else 1)"
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     restart: unless-stopped
 
   mcp-file:
@@ -34,4 +52,28 @@ services:
       - ./w-mcp/02_file-mcp-server:/app
     ports:
       - "16682:16682"
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - python -c "import urllib.request,sys;sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:16682/health',timeout=3).status==200 else 1)"
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  mcp-12306:
+    image: 12306-mcp:latest
+    container_name: mcp-12306
+    command: ["node", "/mcp/node_modules/12306-mcp/build/index.js", "--port", "16683"]
+    ports:
+      - "16683:16683"
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - node -e "fetch('http://127.0.0.1:16683/mcp').then(r=>process.exit(r.status<500?0:1)).catch(()=>process.exit(1))"
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     restart: unless-stopped

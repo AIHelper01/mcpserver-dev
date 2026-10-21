@@ -165,7 +165,9 @@ Remove-Item Env:WEATHER_MCP_PORT
 固定结构：
 
 ```
-docker/asgi_both.py            # 共用启动垫片（双传输）
+docker/asgi_both.py            # 共用启动垫片（双传输 + /health）
+Makefile                       # 一键起停入口（macOS / Linux）
+mcp_ctl.py                     # 起停 / 状态 / 体检 / 前置检查，跨平台零依赖
 <NN_xxx_server>/Dockerfile     # 每个服务一个
 <NN_xxx_server>/asgi_both.py   # 垫片的副本（build context 限制，需复制一份）
 docker-compose.yml             # 统一管理
@@ -204,18 +206,35 @@ docker-compose.yml             # 统一管理
      代码：代码放 `/opt/app`，`cd /app` 后再起 uvicorn（见 02 的 Dockerfile）。
    - `restart: unless-stopped`。
 
-4. 日常命令：
+4. 日常命令：优先用一键入口 `make`（Windows 无 make 时把 `make x` 换成
+   `python mcp_ctl.py x`，两者完全等价；`mcp_ctl.py` 只用标准库，Python 3.10+ 可跑（本机 3.10 实测））：
 
    ```bash
    cd /Users/will/workspace/mcpserver-dev
-   docker compose up -d --build        # 构建并启动全部
-   docker compose build mcp-xxx && docker compose up -d mcp-xxx   # 只更新一个
-   docker compose logs -f mcp-xxx
-   docker compose down                 # 停止并删除容器
+   make doctor      # 前置检查：docker / compose v2 / .env 密钥 / 端口占用
+   make up          # 构建并启动全部（= docker compose up -d --build）
+   make status      # 容器状态 + healthcheck（healthy 才算真的好）
+   make check       # 端到端体检：/health、/mcp 会话、真实工具调用、/sse
+   make logs SVC=mcp-weather     # 跟随某个服务日志
+   make restart SVC=mcp-weather  # 重启单个；省略 SVC 则重启全部
+   make build SVC=mcp-demo       # 只重建某个服务的镜像
+   make down        # 停止并删除容器（镜像与挂载数据保留）
    ```
 
+   `make help` 列出全部目标；需要原生能力时仍可直接用 `docker compose ...`。
+   `make check` 失败返回非 0，可直接用于 CI 或 cron 巡检。
+
+   healthcheck 约定（`docker-compose.yml` 已内置，`interval 15s / retries 3 /
+   start_period 10s`）：
+
+   - 自研服务：`GET /health` 必须 200，该端点由 `docker/asgi_both.py` 提供，
+     返回 `{"ok": true, "server": "...", "transports": ["/mcp", "/sse"]}`。
+   - third-party 12306：上游没有 `/health`，`GET /mcp` 返回 405 已能证明监听与
+     HTTP 栈正常，故按“任意 <500 响应”判活。
+   - 新增服务时记得同时写 healthcheck，并把端口同步进去。
+
 5. 验证清单（新服务上线前逐项过）：
-   - `docker ps` 状态 Up 且不重启。
+   - `docker ps` 状态 Up 且不重启，`STATUS` 显示 `(healthy)`。
    - `/mcp`：initialize → notifications/initialized → tools/list → tools/call
      完整会话（Streamable HTTP 需要回传 `mcp-session-id` 头）。
    - `/sse`：`GET /sse` 拿 endpoint → `POST /messages/` → SSE 流收到 serverInfo。
