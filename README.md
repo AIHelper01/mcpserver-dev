@@ -88,9 +88,10 @@ docker-compose.yml             # 统一管理
 
 1. 双传输垫片 `docker/asgi_both.py`：
    FastMCP 原生一次只能跑一种传输。垫片取 `mcp._mcp_server` 底层实例，
-   用 `StreamableHTTPSessionManager` 精确挂 `/mcp`，
-   用 `SseServerTransport` 挂 `/sse` + `/messages/`，
-   lifespan 用 `@asynccontextmanager` 包 `streamable.run()`。
+   用 `StreamableHTTPSessionManager` 处理 `/mcp`，用 `SseServerTransport`
+   处理 `/sse` + `/messages/`。`app` 是一个**原生 ASGI 分发函数**（按 path
+   直调三个 handler），Starlette 只借它跑 lifespan（`@asynccontextmanager`
+   包 `streamable.run()`）和默认 404。
    server 脚本零改动，只需 `MCP_MODULE` 指向模块名。
 
 2. Dockerfile 套路（Python 服务）：
@@ -131,14 +132,23 @@ docker-compose.yml             # 统一管理
      完整会话（Streamable HTTP 需要回传 `mcp-session-id` 头）。
    - `/sse`：`GET /sse` 拿 endpoint → `POST /messages/` → SSE 流收到 serverInfo。
    - 至少一次真实工具调用返回真实数据。
+   - 客户端断连后日志干净：`curl -m 1 -N http://127.0.0.1:<port>/sse` 连打几次，
+     `docker logs mcp-xxx` 不应出现 ASGI/traceback。
    - 端口排查：`lsof -nP -iTCP:<port> -sTCP:LISTEN`（宿主残留进程会抢 IPv4，
      Docker 只占 IPv6，表现为端口通但响应来自旧服务）。
 
 ## 三、踩坑记录（勿重蹈）
 
 - 模块名/文件名不能带连字符：COPY 时重命名为 `mcp_server.py`。
-- Starlette `Mount("/mcp")` 会 307 重定向到 `/mcp/`，多数 MCP 客户端不跟
-  重定向 → 用精确 `Route("/mcp")` 直调 session manager。
+- Starlette `Mount("/mcp")` 的匹配规则是 `/mcp/...`，裸 `/mcp` 会被 307
+  重定向到 `/mcp/`，而多数 MCP 客户端不跟重定向 → 不要用 Mount 挂 `/mcp`。
+- Starlette `Route(endpoint=...)` 会把 handler 返回值当 Response 再发一次：
+  SSE/流式响应结束后 uvicorn 报
+  `Unexpected ASGI message 'http.response.start' sent, after response already completed`
+  （每次客户端断连刷一条，客户端不受影响但日志很脏）→ 用原生 ASGI 函数自己分发。
+- 新版 starlette（容器内 1.9.0）`Starlette()` 没有 `redirect_slashes` 参数
+  （在 `Router()` 上），别指望用 `redirect_slashes=False` 绕开上面的坑。
+- 垫片已同时兼容 `/mcp` 与 `/mcp/`，未知路径统一 404。
 - `StreamableHTTPSessionManager.run()` 不接受 app 参数，lifespan 需自己包
   `@asynccontextmanager`。
 - `.env` 给 compose 用的行避免空格式差异：`KEY=value`，值不带引号最稳。
